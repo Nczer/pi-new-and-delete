@@ -16,12 +16,4 @@ Useful when you want to quickly discard the current conversation and start over 
 
 ## Installation
 
-Copy this extension into your pi extensions directory (~/.pi/agent/extensions/new-and-delete/).
-
-## Changelog
-
-## 1.1 — Double confirmation for named sessions
-
-### New features
-
-- **Second confirmation for named sessions**. When deleting a session that has a custom name (set via `/name`), a second confirmation dialog appears asking "Delete named session?" to prevent accidental deletion of intentionally named sessions. Unnamed sessions still require only the single confirmation.
+Copy this extension into your pi extensions directory (~/.pi/agent/extensions/).
