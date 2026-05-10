@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 — Migrate to @earendil-works/pi-coding-agent
+
+Ditto
+
 ## 1.1 — Double confirmation for named sessions
 
 ### New features

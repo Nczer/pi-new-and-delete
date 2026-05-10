@@ -4,7 +4,7 @@
  * Adds /nn command: starts a new session and deletes the current session file.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
 
 export default function (pi: ExtensionAPI) {
