@@ -5,9 +5,9 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import * as fs from "node:fs";
+import * as fs from "node:fs/promises";
 
-export default function (pi: ExtensionAPI) {
+export default function nnExtension(pi: ExtensionAPI) {
   pi.registerCommand("nn", {
     description: "Start a new session and delete the current one",
     handler: async (_args, ctx) => {
@@ -43,18 +43,17 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      // Delete the current session file before switching
-      try {
-        fs.unlinkSync(sessionFile);
-      } catch (err) {
-        ctx.ui.notify(`Failed to delete session: ${err}`, "error");
-        return;
-      }
-
-      // Start a fresh session
+      // Start a fresh session first, then delete the old file inside the callback
+      // to avoid any race with the session manager's teardown/flush logic.
+      const fileToDelete = sessionFile;
       await ctx.newSession({
-        withSession: (ctx) => {
-          ctx.ui.notify("New session started, old session deleted", "success");
+        withSession: async (newCtx) => {
+          try {
+            await fs.unlink(fileToDelete);
+            newCtx.ui.notify("New session started, old session deleted", "info");
+          } catch {
+            newCtx.ui.notify("New session started, but old file could not be deleted", "warning");
+          }
         },
       });
     },
