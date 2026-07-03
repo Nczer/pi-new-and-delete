@@ -1,0 +1,10 @@
+{
+  "name": "pi-nn",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
