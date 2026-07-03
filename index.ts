@@ -46,16 +46,29 @@ export default function nnExtension(pi: ExtensionAPI) {
       // Start a fresh session first, then delete the old file inside the callback
       // to avoid any race with the session manager's teardown/flush logic.
       const fileToDelete = sessionFile;
-      await ctx.newSession({
+      const result = await ctx.newSession({
         withSession: async (newCtx) => {
           try {
             await fs.unlink(fileToDelete);
             newCtx.ui.notify("New session started, old session deleted", "info");
-          } catch {
-            newCtx.ui.notify("New session started, but old file could not be deleted", "warning");
+          } catch (e) {
+            // ENOENT means the file is already gone — the desired end state.
+            if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+              newCtx.ui.notify("New session started; old session already gone", "info");
+            } else {
+              newCtx.ui.notify(
+                `New session started; could not delete old file: ${e instanceof Error ? e.message : String(e)}`,
+                "warning",
+              );
+            }
           }
         },
       });
+
+      // Cancellation happens before teardown, so ctx is still valid here.
+      if (result.cancelled) {
+        ctx.ui.notify("New session was cancelled; old session kept", "info");
+      }
     },
   });
 }
