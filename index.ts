@@ -1,27 +1,37 @@
 /**
  * New & Delete extension
  *
- * Adds /nn command: starts a new session and deletes the current session file.
+ * Adds /nn command: starts a new session and archives the current session file
+ * as a single rotating backup (.nn.bak) in the same session directory.
+ *
+ * Running /nn again replaces the previous backup with the then-current session.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
+
+// Single rotating backup slot per session directory.
+// Not *.jsonl so pi's session discovery (findMostRecentSession / session list) ignores it.
+const BAK_NAME = ".nn.bak";
 
 export default function nnExtension(pi: ExtensionAPI) {
   pi.registerCommand("nn", {
-    description: "Start a new session and delete the current one",
+    description: "Start a new session; archive the current one as a backup (replaces previous backup)",
     handler: async (_args, ctx) => {
       const sessionFile = ctx.sessionManager.getSessionFile();
 
       if (!sessionFile) {
-        ctx.ui.notify("No session file to delete (ephemeral session)", "info");
+        ctx.ui.notify("No session file to back up (ephemeral session)", "info");
         return;
       }
 
-      // Confirm before deleting
+      const bakPath = path.join(path.dirname(sessionFile), BAK_NAME);
+
+      // Confirm before archiving
       const ok = await ctx.ui.confirm(
-        "Delete current session?",
-        `This will start a new session and permanently delete:\n${sessionFile}`,
+        "Back up current session?",
+        `This will start a new session and move the current session to:\n${bakPath}\nAny previous backup will be deleted.`,
       );
 
       if (!ok) {
@@ -33,8 +43,8 @@ export default function nnExtension(pi: ExtensionAPI) {
       const sessionName = ctx.sessionManager.getSessionName();
       if (sessionName) {
         const ok2 = await ctx.ui.confirm(
-          "Delete named session?",
-          `This session has a custom name ("${sessionName}").\nAre you sure you want to delete it?`,
+          "Back up named session?",
+          `This session has a custom name ("${sessionName}").\nIts previous backup will be replaced. Continue?`,
         );
 
         if (!ok2) {
@@ -43,21 +53,35 @@ export default function nnExtension(pi: ExtensionAPI) {
         }
       }
 
-      // Start a fresh session first, then delete the old file inside the callback
+      const hadBackup = await fs
+        .access(bakPath)
+        .then(() => true, () => false);
+
+      // Start a fresh session first, then move the old file inside the callback
       // to avoid any race with the session manager's teardown/flush logic.
-      const fileToDelete = sessionFile;
+      const fileToMove = sessionFile;
       const result = await ctx.newSession({
         withSession: async (newCtx) => {
           try {
-            await fs.unlink(fileToDelete);
-            newCtx.ui.notify("New session started, old session deleted", "info");
+            // POSIX rename overwrites the target, but unlink first for portability.
+            await fs.unlink(bakPath).catch((e) => {
+              if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+            });
+            await fs.rename(fileToMove, bakPath);
+            newCtx.ui.notify(
+              hadBackup
+                ? "New session started; previous backup replaced"
+                : "New session started; session backed up",
+              "info",
+            );
           } catch (e) {
-            // ENOENT means the file is already gone — the desired end state.
+            // ENOENT means the old file is already gone — the backup slot will be
+            // empty, which is still a valid end state.
             if ((e as NodeJS.ErrnoException).code === "ENOENT") {
-              newCtx.ui.notify("New session started; old session already gone", "info");
+              newCtx.ui.notify("New session started; old session already gone (nothing backed up)", "info");
             } else {
               newCtx.ui.notify(
-                `New session started; could not delete old file: ${e instanceof Error ? e.message : String(e)}`,
+                `New session started; could not back up old file: ${e instanceof Error ? e.message : String(e)}`,
                 "warning",
               );
             }
